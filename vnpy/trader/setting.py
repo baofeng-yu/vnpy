@@ -17,6 +17,7 @@ SETTINGS: Dict[str, Any] = {
     "log.level": CRITICAL,
     "log.console": True,
     "log.file": True,
+    "log.filename": "",
 
     "email.server": "smtp.qq.com",
     "email.port": 465,

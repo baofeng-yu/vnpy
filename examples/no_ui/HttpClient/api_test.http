@@ -1,0 +1,3 @@
+### GET request with a header
+GET https://baidu.com
+Accept: application/json

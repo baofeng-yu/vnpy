@@ -10,17 +10,25 @@ from datetime import datetime, time
 from logging import INFO
 from typing import cast
 
-from vnpy.event import EventEngine
+from vnpy.event import EventEngine, Event
 from vnpy.trader.setting import SETTINGS
 from vnpy.trader.engine import MainEngine, LogEngine
 from vnpy_mc import McGateway
 from vnpy_portfoliostrategy import PortfolioStrategyApp, StrategyEngine
-from vnpy_portfoliostrategy.base import EVENT_PORTFOLIO_LOG
+from vnpy_portfoliostrategy.base import EVENT_PORTFOLIO_STRATEGY, EVENT_PORTFOLIO_LOG
 
 SETTINGS["log.active"] = True
 SETTINGS["log.level"] = INFO
 SETTINGS["log.console"] = True
 SETTINGS["log.file"] = True
+
+DAY_START = time(8, 55)
+DAY_AUCTION_END = time(9, 00)
+DAY_END = time(15, 30)
+
+NIGHT_START = time(20, 55)
+NIGHT_AUCTION_END = time(21, 00)
+NIGHT_END = time(2, 45)
 
 #生产环境
 mcctp_setting = {
@@ -42,7 +50,7 @@ test_mcctp_setting = {
     "行情用户名": "207954",
     "行情密码": "!zzsr123456",
     "行情经纪商代码": "9999",
-    "行情服务器": "180.168.146.187:10211",
+    "行情服务器": "180.168.146.187:10211" if DAY_START < datetime.now().time() < DAY_END else "180.168.146.187:10131",
     "交易用户名": "190018",
     "交易密码": "swhy1234",
     "交易经纪商代码": "2070",
@@ -55,17 +63,13 @@ test_mcctp_setting = {
 
 mcctp_setting = test_mcctp_setting
 
+
 def pf(*args):
     print(f'[{datetime.now()}] ', *args)
 
 
-DAY_START = time(8, 55)
-DAY_AUCTION_END = time(9, 00)
-DAY_END = time(15, 30)
+strategies_tracker = dict()
 
-NIGHT_START = time(20, 55)
-NIGHT_AUCTION_END = time(21, 00)
-NIGHT_END = time(2, 45)
 
 def valid_night_start_time():
     current_time = datetime.now().time()
@@ -81,6 +85,22 @@ def valid_day_start_time():
     return True
 
 
+def process_strategy_event(event: Event):
+    global strategies_tracker
+    if event.type == EVENT_PORTFOLIO_STRATEGY:
+        strategy_state = event.data
+        strategy_name = strategy_state["strategy_name"]
+        strategy_inited = strategy_state["inited"]
+        strategy_trading = strategy_state["trading"]
+        # strategy_tracker[...] = [strategy,inited, strategy.trading, has_started_flag]
+
+        if strategy_name in strategies_tracker and strategies_tracker[strategy_name] == [True, False, False] and strategy_trading:
+            strategies_tracker[strategy_name] = [strategy_inited, strategy_trading, True]
+        elif strategy_name in strategies_tracker:
+            strategies_tracker[strategy_name][:2] = [strategy_inited, strategy_trading]
+        else:
+            strategies_tracker[strategy_name] = [strategy_inited, strategy_trading, False]
+
 def run():
     #
     # if not valid_night_start_time():
@@ -94,7 +114,8 @@ def run():
     #     return
 
     # 事件引擎的定时器触发区间，默认1s一次
-    event_engine = EventEngine(interval=30)
+    event_engine = EventEngine(interval=1)
+    event_engine.register(EVENT_PORTFOLIO_STRATEGY, process_strategy_event)
     main_engine = MainEngine(event_engine)
     main_engine.add_gateway(McGateway)
     main_engine.add_app(PortfolioStrategyApp)
@@ -109,16 +130,16 @@ def run():
     main_engine.connect(mcctp_setting, "MC")
     main_engine.write_log("连接MC接口")
 
-    sleep(60)
+    sleep(50)
     portfolio_engine.init_engine()
     main_engine.write_log("PORTFOLIO引擎初始化完成")
-    sleep(30)
     portfolio_engine.init_all_strategies()
-    sleep(30)   # Leave enough time to complete strategy initialization
+    sleep(15)
     main_engine.write_log("PORTFOLIO策略全部初始化")
 
     portfolio_engine.start_all_strategies()
     main_engine.write_log("PORTFOLIO策略全部启动")
+    sleep(15)
 
     # while True:
     #     current_time = datetime.now().time()
@@ -127,13 +148,19 @@ def run():
     #         break
     #     else:
     #         sleep(10)
-    # todo detect strategies stop event, then stop the portfolio engine automatically
+    global strategies_tracker
+    while True:
+        # 有策略曾经被启动并被记录，且所有策略都是inited=True，trading=False，started_flag = True的状态
+        # 则认为所有策略都已运行结束，此时可以退出主引擎，保险起见，此时要再次调用stop_all_strategies()
+        if len(strategies_tracker) != 0 and all(strategy[0] and not strategy[1] and strategy[2] for strategy in strategies_tracker.values()):
+            break
+        sleep(15)
 
-    main_engine.write_log("输入任意内容，停止策略")
-    input()
     portfolio_engine.stop_all_strategies()
     main_engine.close()
-    input("主引擎已关闭,输入任意键可退出")
+    sleep(5)
+
+    input("主引擎已关闭,输入任意键可退出: ")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ import platform
 from enum import Enum
 from typing import Any, Dict, List
 from copy import copy
+
+from PySide6.QtCore import QEvent
 from tzlocal import get_localzone_name
 
 import importlib_metadata
@@ -579,6 +581,8 @@ class ConnectDialog(QtWidgets.QDialog):
 
         self.widgets: Dict[str, QtWidgets.QWidget] = {}
 
+        self.button: QtWidgets.QPushButton
+
         self.init_ui()
 
     def init_ui(self) -> None:
@@ -623,9 +627,9 @@ class ConnectDialog(QtWidgets.QDialog):
             form.addRow(f"{field_name} <{field_type.__name__}>", widget)
             self.widgets[field_name] = (widget, field_type)
 
-        button: QtWidgets.QPushButton = QtWidgets.QPushButton("连接")
-        button.clicked.connect(self.connect)
-        form.addRow(button)
+        self.button = QtWidgets.QPushButton("连接")
+        self.button.clicked.connect(self.connect)
+        form.addRow(self.button)
 
         self.setLayout(form)
 
@@ -650,6 +654,13 @@ class ConnectDialog(QtWidgets.QDialog):
         self.main_engine.connect(setting, self.gateway_name)
         self.accept()
 
+    # def event(self, event: QEvent):
+    #     # Print the event type
+    #     print(f'Received event: {event.type()}')
+    #
+    #     # Call the base class implementation
+    #     return super().event(event)
+    #
 
 class TradingWidget(QtWidgets.QWidget):
     """

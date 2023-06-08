@@ -7,7 +7,6 @@ from vnpy.trader.ui import MainWindow, create_qapp
 from vnpy_algotrading import AlgoTradingApp
 from vnpy_algotrading.base import EVENT_ALGO_LOG
 from vnpy_mc import McGateway
-from vnpy_portfoliomanager import PortfolioManagerApp
 from vnpy_portfoliostrategy import PortfolioStrategyApp
 from vnpy_riskmanager import RiskManagerApp
 
@@ -28,7 +27,6 @@ def main():
     main_engine.add_gateway(McGateway)
     main_engine.add_app(AlgoTradingApp)
     main_engine.add_app(PortfolioStrategyApp)
-    main_engine.add_app(PortfolioManagerApp)
     main_engine.add_app(RiskManagerApp)
     main_engine.write_log("初始化完成")
 

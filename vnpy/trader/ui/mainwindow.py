@@ -8,6 +8,8 @@ from functools import partial
 from importlib import import_module
 from typing import Callable, Dict, List, Tuple
 
+from typing_extensions import override
+
 import vnpy
 from vnpy.event import EventEngine
 
@@ -47,6 +49,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.widgets: Dict[str, QtWidgets.QWidget] = {}
         self.monitors: Dict[str, BaseMonitor] = {}
+
+        self.widgets_classes: Dict[str, QtWidgets.QWidget] = {}
+
+        self.dialog: ConnectDialog
+        self.algo_widget: QtWidgets.QWidget
 
         self.init_ui()
 
@@ -126,7 +133,8 @@ class MainWindow(QtWidgets.QMainWindow):
         for app in all_apps:
             ui_module: ModuleType = import_module(app.app_module + ".ui")
             widget_class: QtWidgets.QWidget = getattr(ui_module, app.widget_name)
-
+            # to expose algo-trader widget
+            self.widgets_classes[app.app_name] = widget_class
             func: Callable = partial(self.open_widget, widget_class, app.app_name)
 
             self.add_action(app_menu, app.display_name, app.icon_name, func, True)
@@ -233,12 +241,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.addDockWidget(area, dock)
         return widget, dock
 
-    def connect(self, gateway_name: str) -> None:
+    @override
+    def connect(self, gateway_name: str, show_widget=True) -> None:
         """
         Open connect dialog for gateway connection.
         """
-        dialog: ConnectDialog = ConnectDialog(self.main_engine, gateway_name)
-        dialog.exec()
+        self.dialog: ConnectDialog = ConnectDialog(self.main_engine, gateway_name)
+        if show_widget:
+            self.dialog.exec()
+
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """
@@ -267,7 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             event.ignore()
 
-    def open_widget(self, widget_class: QtWidgets.QWidget, name: str) -> None:
+    def open_widget(self, widget_class: QtWidgets.QWidget, name: str) -> QtWidgets.QWidget:
         """
         Open contract manager.
         """
@@ -280,6 +291,21 @@ class MainWindow(QtWidgets.QMainWindow):
             widget.exec()
         else:
             widget.show()
+
+    def initiate_algo_widget(self, widget_class: QtWidgets.QWidget, name: str) -> QtWidgets.QWidget:
+        """
+        Open contract manager.
+        """
+        self.algo_widget = self.widgets.get(name, None)
+        if not self.algo_widget:
+            self.algo_widget = widget_class(self.main_engine, self.event_engine)
+            self.widgets[name] = self.algo_widget
+
+    def open_algo_widget(self):
+        if isinstance(self.algo_widget, QtWidgets.QDialog):
+            self.algo_widget.show()
+        else:
+            self.algo_widget.show()
 
     def save_window_setting(self, name: str) -> None:
         """
